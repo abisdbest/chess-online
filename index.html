@@ -19,9 +19,9 @@
         <input id="moveInput" placeholder="Enter move">
         <button onclick="sendMove()">Send Move</button>
     </div>
-    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script>
-        const socket = io();
+        const socket = io('https://chess-online-node-server.onrender.com/'); // Replace with your server URL
         let currentRoom = '';
 
         function joinRoom() {
@@ -43,7 +43,7 @@
 
         function sendMove() {
             const move = document.getElementById('moveInput').value;
-            const position = 'position after move'; // You should replace this with actual position data
+            const position = 'position after move'; // Replace with actual position data
             if (currentRoom && move) {
                 socket.emit('newMove', { room: currentRoom, move, position });
             }
