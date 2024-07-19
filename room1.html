@@ -1,0 +1,54 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Game</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        #messages { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div>
+        <input id="roomInput" placeholder="Enter room name">
+        <button onclick="joinRoom()">Join Room</button>
+    </div>
+    <div id="game">
+        <div id="messages"></div>
+        <input id="moveInput" placeholder="Enter move">
+        <button onclick="sendMove()">Send Move</button>
+    </div>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        const socket = io('https://quizizz-chess-server.onrender.com/'); // Replace with your server URL
+        let currentRoom = '';
+
+        function joinRoom() {
+            const room = document.getElementById('roomInput').value;
+            if (room) {
+                currentRoom = room;
+                socket.emit('joinRoom', room);
+            }
+        }
+
+        socket.on('gameState', (state) => {
+            document.getElementById('messages').innerHTML = JSON.stringify(state);
+        });
+
+        socket.on('moveUpdate', (update) => {
+            const messages = document.getElementById('messages');
+            messages.innerHTML += `<p>Move: ${update.move}, Position: ${update.position}</p>`;
+        });
+
+        function sendMove() {
+            const move = document.getElementById('moveInput').value;
+            const position = 'position after move'; // Replace with actual position data
+            if (currentRoom && move) {
+                socket.emit('newMove', { room: currentRoom, move, position });
+            }
+        }
+    </script>
+</body>
+</html>
