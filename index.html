@@ -13,11 +13,11 @@
         .board {
             aspect-ratio : 1.125 / 1;
             position: fixed;
-            left: calc((100% - (100% - 1100px)) / 2);
-            top: calc((100% - (100% - 150px)) / 2);
+            left: calc(60% / 2);
+            top: calc(60% - 600px / 2);
             display: flex;
             flex-wrap: wrap;
-            width: calc(100% - 1100px);
+            width: calc(40%);
         }
 
         .square {
@@ -48,14 +48,20 @@
         }
 
         .piece {
-            width: 68px;
-            height: 68px;
+            width: 100%;
+            height: 100%;
         }
     </style>
 </head>
 <body>
     <div class="board"></div>
-
+    <div>
+        <input id="roomInput" placeholder="Enter room name">
+        <button onclick="joinRoom()">Join Room</button>
+    </div>
+    <div id="game">
+        <div id="messages"></div>
+    </div>
     <script>
         // Chess game logic
         let selectedSquare = null;
@@ -104,18 +110,18 @@
 
         function getPieceImage(piece) {
             const pieceImages = {
-                'P': 'images/p2.png',
-                'R': 'images/r2.png',
-                'N': 'images/n2.png',
-                'B': 'images/b2.png',
-                'Q': 'images/q2.png',
-                'K': 'images/k2.png',
-                'p': 'images/p.png',
-                'r': 'images/r.png',
-                'n': 'images/n.png',
-                'b': 'images/b.png',
-                'q': 'images/q.png',
-                'k': 'images/k.png',
+                'P': 'https://quizizzchessimages.pages.dev/images/p2.png',
+                'R': 'https://quizizzchessimages.pages.dev/images/r2.png',
+                'N': 'https://quizizzchessimages.pages.dev/images/n2.png',
+                'B': 'https://quizizzchessimages.pages.dev/images/b2.png',
+                'Q': 'https://quizizzchessimages.pages.dev/images/q2.png',
+                'K': 'https://quizizzchessimages.pages.dev/images/k2.png',
+                'p': 'https://quizizzchessimages.pages.dev/images/p.png',
+                'r': 'https://quizizzchessimages.pages.dev/images/r.png',
+                'n': 'https://quizizzchessimages.pages.dev/images/n.png',
+                'b': 'https://quizizzchessimages.pages.dev/images/b.png',
+                'q': 'https://quizizzchessimages.pages.dev/images/q.png',
+                'k': 'https://quizizzchessimages.pages.dev/images/k.png',
             };
             return pieceImages[piece];
         }
@@ -385,14 +391,91 @@
             return moves;
         }
 
-        function makeMove(from, to) {
-            const piece = board[from.row][from.col];
+        function makeMoveFromServer(from, to) {
+            board[to.row][to.col] = board[from.row][from.col];
             board[from.row][from.col] = '';
-            board[to.row][to.col] = piece;
-            alert(`Piece moved from ${String.fromCharCode(97 + from.col)}${8 - from.row} to ${String.fromCharCode(97 + to.col)}${8 - to.row}`);
+            
+            // Update the UI to reflect the move
+            // ... (use your UI library to update the board display)
+            
+            // You might also want to emit an event to the server
+            // to acknowledge the move and update the server-side game state:
         }
+        
+        function makeMove(from, to) {
+            board[to.row][to.col] = board[from.row][from.col];
+            board[from.row][from.col] = '';
+            // alert(`Piece moved from ${String.fromCharCode(97 + from.col)}${8 - from.row} to ${String.fromCharCode(97 + to.col)}${8 - to.row}`);
+            // sendMove(data.moves)
+            socket.emit('moveApplied', { room: 'your_room_name', move: { from, to } });
+        }
+    
+        // Function to process server moves
+        function processServerMoves(moves) {
+            moves.forEach((move, index) => {
+                const [from, to] = move.split('>');
+                const [fromRow, fromCol] = convertNotationToCoords(from.trim());
+                const [toRow, toCol] = convertNotationToCoords(to.trim());
+    
+                makeMoveFromServer({ row: fromRow, col: fromCol }, { row: toRow, col: toCol });
+            })
+    
+            renderBoard();
+        }
+    
+        // Helper function to convert chess notation to coordinates
+        function convertNotationToCoords(notation) {
+            const col = notation.charCodeAt(0) - 'a'.charCodeAt(0);
+            const row = parseInt(notation.slice(1)) - 1;
+            return [row, col];
+        }
+    
+        // const serverMoves = {"moves": ["c2 > c4", "d1 > a4"], "positions": ["position after move", "position after move"]};
+    
+        // processServerMoves(serverMoves.moves);
 
         renderBoard();
+    </script>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js#quizizz"></script>
+    <script>
+        const socket = io('https://quizizz-chess-server.onrender.com/'); // Replace with your server URL
+        let currentRoom = '';
+
+        function joinRoom() { 
+            // renderBoard()
+            const room = document.getElementById('roomInput').value;
+            if (room) {
+                currentRoom = room;
+                socket.emit('joinRoom', room);
+            }
+        }
+
+        socket.on('gameState', (state) => {
+            // alert("changed")
+            document.getElementById('messages').innerHTML = JSON.stringify(state);
+            moves = []
+            moves = JSON.stringify(state.moves)
+            // alert(state.moves)
+            processServerMoves(state.moves)
+        });
+
+        socket.on('moveUpdate', (data) => {
+            const { move, position, currentPlayer } = data;
+            const decodedMove = decodeMove(move);
+            
+            // Call makeMoveFromServer to update the client-side board
+            makeMoveFromServer(decodedMove.from, decodedMove.to);
+            
+            // Update the game state and UI
+            // ... 
+        });
+
+        function sendMove(move) {
+            const position = 'position after move'; // Replace with actual position data
+            if (currentRoom && move) {
+                socket.emit('newMove', { room: currentRoom, move, position });
+            }
+        }
     </script>
 </body>
 </html>
