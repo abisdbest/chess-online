@@ -1,33 +1,124 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Chess Game</title>
-    <script src="https://cdn.jsdelivr.net/npm/eruda" type="text/javascript" charset="utf-8"></script>
-    <script type="text/javascript" charset="utf-8">
-        eruda.init()
-    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Chess</title>
     <style>
         body {
-            background-color: #5c5c5c;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            display: flex;
+            height: 100vh;
+            background-color: #f4f4f4;
+        }
+        .container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .chessboard {
+            width: 500px;
+            height: 500px;
+            background-color: black;
+            position: relative;
+        }
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            margin-left: 30px;
+            border: 1px solid #ddd;
+            background-color: #fff;
+            width: 400px;
+            height: 500px;
+            box-shadow: 0 0 12px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            box-sizing: border-box;
+        }
+        .chat-box {
+            flex: 1;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 15px;
+            background-color: #fafafa;
+        }
+        .chat-input {
+            display: flex;
+            border-top: 1px solid #ddd;
+            padding: 10px 0;
+        }
+        .chat-input input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        .chat-input button {
+            padding: 10px 15px;
+            border: 1px solid #007bff;
+            background-color: #007bff;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .room-container {
+            display: flex;
+            margin-bottom: 25px;
+            align-items: center;
+        }
+        .room-container input {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-right: 10px;
+            width: 240px;
+        }
+        .room-container button {
+            padding: 10px 12px;
+            border: 1px solid #007bff;
+            background-color: #007bff;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
         }
         .board {
-            aspect-ratio : 1.125 / 1;
-            position: fixed;
-            left: calc(60% / 2);
-            top: calc(60% - 600px / 2);
+            /* aspect-ratio : 1.125 / 1; */
+            width: 500px;
+            height: 500px;
+            background-color: transparent;
+            position: relative;
             display: flex;
             flex-wrap: wrap;
-            width: calc(40%);
+            /* margin-bottom: 100px; */
+            transition: opacity 0.3s ease;
+            z-index: 10;
         }
-
+        .board.hidden {
+            opacity: 0;
+            position: absolute;
+        }
+        .player-turn {
+            position: absolute;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            color: white;
+        }
         .square {
-            width: calc(100% / 9);
+            width: calc(100% / 8);
             height: calc(100% / 8);
             display: flex;
             justify-content: center;
             align-items: center;
             font-size: 30px;
-            border: 1px solid #000;
+            outline: 1px solid black;
         }
 
         .square.white {
@@ -35,7 +126,7 @@
         }
 
         .square.black {
-            background-color: #333;
+            background-color: rgb(143, 69, 17);
             color: #fff;
         }
 
@@ -54,18 +145,31 @@
     </style>
 </head>
 <body>
-    <div class="board"></div>
-    <div>
-        <input id="roomInput" placeholder="Enter room name">
-        <button onclick="joinRoom()">Join Room</button>
-    </div>
-    <div id="game">
-        <div id="messages"></div>
+    <div class="container">
+        <div class="board"></div>
+        <div class="chat-container">
+            <div class="room-container">
+                <input id="roomInput" type="text" placeholder="Room name">
+                <button onclick="joinRoom()">Enter Room</button>
+            </div>
+            <div class="chat-box">
+                <!-- Chat messages will appear here -->
+                <p><strong>System:</strong> Welcome to the chat!</p>
+            </div>
+            <div class="chat-input">
+                <input type="text" placeholder="Type a message...">
+                <button>Send</button>
+            </div>
+        </div>
     </div>
     <script>
         // Chess game logic
         let selectedSquare = null;
         let possibleMoves = [];
+        let movesToProcess = [];
+        let boardElement
+        let boardOrientation = confirm("black => ok,\nwhite => cancel") ? 'black' : 'white';
+        // let boardOrientation = "white"
 
         const board = [
             ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
@@ -78,31 +182,39 @@
             ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'],
         ];
 
-        function renderBoard() {
-            const boardElement = document.querySelector('.board');
+        function renderBoard(isBuffer = false) {
+            const boardElement = document.querySelector(isBuffer ? '.bufferBoard' : '.board');
+            console.log('Rendering Board:', board); // Debugging output
             boardElement.innerHTML = '';
-
-            for (let row = 0; row < 8; row++) {
-                for (let col = 0; col < 8; col++) {
+            
+            const rows = 8;
+            const cols = 8;
+            
+            // Adjust row and col for black orientation
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    const adjustedRow = boardOrientation === 'white' ? row : (rows - 1 - row);
+                    const adjustedCol = boardOrientation === 'white' ? col : (cols - 1 - col);
+            
                     const square = document.createElement('div');
-                    square.className = `square ${getSquareColor(row, col)}`;
-                    square.dataset.row = row;
-                    square.dataset.col = col;
-
-                    const piece = board[row][col];
+                    square.className = `square ${getSquareColor(adjustedRow, adjustedCol)}`;
+                    square.dataset.row = adjustedRow;
+                    square.dataset.col = adjustedCol;
+            
+                    const piece = board[adjustedRow][adjustedCol];
                     if (piece !== '') {
                         const pieceImage = document.createElement('img');
                         pieceImage.src = getPieceImage(piece);
                         pieceImage.className = 'piece';
                         square.appendChild(pieceImage);
                     }
-
+            
                     square.addEventListener('click', handleSquareClick);
-
-                    if (possibleMoves.some(move => move.row === row && move.col === col)) {
+            
+                    if (possibleMoves.some(move => move.row === adjustedRow && move.col === adjustedCol)) {
                         square.classList.add('moveable');
                     }
-
+            
                     boardElement.appendChild(square);
                 }
             }
@@ -391,38 +503,43 @@
             return moves;
         }
 
-        function makeMoveFromServer(from, to) {
-            board[to.row][to.col] = board[from.row][from.col];
-            board[from.row][from.col] = '';
-            
-            // Update the UI to reflect the move
-            // ... (use your UI library to update the board display)
-            
-            // You might also want to emit an event to the server
-            // to acknowledge the move and update the server-side game state:
+        function makeMove(from, to) {
+            socket.emit('newMove', { room: currentRoom, move: { from, to } });
         }
         
-        function makeMove(from, to) {
+        function makeMoveFromServer(from, to) {
+            console.log('Move from server:', from, to);
             board[to.row][to.col] = board[from.row][from.col];
             board[from.row][from.col] = '';
-            // alert(`Piece moved from ${String.fromCharCode(97 + from.col)}${8 - from.row} to ${String.fromCharCode(97 + to.col)}${8 - to.row}`);
-            // sendMove(data.moves)
-            socket.emit('moveApplied', { room: 'your_room_name', move: { from, to } });
-        }
-    
-        // Function to process server moves
-        function processServerMoves(moves) {
-            moves.forEach((move, index) => {
-                const [from, to] = move.split('>');
-                const [fromRow, fromCol] = convertNotationToCoords(from.trim());
-                const [toRow, toCol] = convertNotationToCoords(to.trim());
-    
-                makeMoveFromServer({ row: fromRow, col: fromCol }, { row: toRow, col: toCol });
-            })
-    
             renderBoard();
         }
-    
+        
+        function recievedMoveFromServer(from, to) {
+            board[to.row][to.col] = board[from.row][from.col];
+            board[from.row][from.col] = '';
+            renderBoard();
+        }
+
+        
+        function processServerMoves(moves) {
+            moves.forEach(move => {
+                const from = move.from;
+                const to = move.to;
+                makeMoveFromServer(from, to);
+            });
+            renderBoard();
+        }
+        
+        // function processServerMoves(moves) {
+        //     moves.forEach(move => {
+        //         const from = move.from;
+        //         const to = move.to;
+        //         makeMoveFromServer(from, to);
+        //     });
+        //     updateBoard();  // Call the update function to transition the new board state
+        // }
+
+            
         // Helper function to convert chess notation to coordinates
         function convertNotationToCoords(notation) {
             const col = notation.charCodeAt(0) - 'a'.charCodeAt(0);
@@ -430,10 +547,6 @@
             return [row, col];
         }
     
-        // const serverMoves = {"moves": ["c2 > c4", "d1 > a4"], "positions": ["position after move", "position after move"]};
-    
-        // processServerMoves(serverMoves.moves);
-
         renderBoard();
     </script>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js#quizizz"></script>
@@ -441,34 +554,59 @@
         const socket = io('https://quizizz-chess-server.onrender.com/'); // Replace with your server URL
         let currentRoom = '';
 
-        function joinRoom() { 
-            // renderBoard()
+        function joinRoom(isReal = true) { 
             const room = document.getElementById('roomInput').value;
             if (room) {
-                currentRoom = room;
-                socket.emit('joinRoom', room);
+                if (isReal) {
+                    currentRoom = room;
+                    socket.emit('joinRoom', room);
+                    resetBoard();  // Reset the board to the starting position
+                } else {
+                    currentRoom = room;
+                    socket.emit('joinRoom', room);
+                    renderBoard()
+                }
             }
         }
 
+        
+        function resetBoard() {
+            const startingPosition = [
+                ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+                ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+                ['', '', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', ''],
+                ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+                ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'],
+            ];
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    board[row][col] = startingPosition[row][col];
+                }
+            }
+            renderBoard();
+        }
+
+        
         socket.on('gameState', (state) => {
-            // alert("changed")
-            document.getElementById('messages').innerHTML = JSON.stringify(state);
-            moves = []
-            moves = JSON.stringify(state.moves)
-            // alert(state.moves)
-            processServerMoves(state.moves)
+            // document.getElementById('messages').innerHTML = JSON.stringify(state);
+            processServerMoves(state.moves);
         });
 
-        socket.on('moveUpdate', (data) => {
-            const { move, position, currentPlayer } = data;
-            const decodedMove = decodeMove(move);
-            
-            // Call makeMoveFromServer to update the client-side board
-            makeMoveFromServer(decodedMove.from, decodedMove.to);
-            
-            // Update the game state and UI
-            // ... 
+
+        socket.on('moveUpdate', (state) => {
+            recievedMoveFromServer(state.move.from, state.move.to);
         });
+
+
+        function decodeMove(move) {
+            return {
+                from: move.from,
+                to: move.to
+            };
+        }
 
         function sendMove(move) {
             const position = 'position after move'; // Replace with actual position data
