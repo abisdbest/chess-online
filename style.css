@@ -1,41 +1,134 @@
 body {
-    background-color: #5c5c5c;
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    display: flex;
+    height: 100vh;
+    background-color: #f4f4f4;
+}
+.container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+.chessboard {
+    width: 500px;
+    height: 500px;
+    background-color: black;
+    position: relative;
+}
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    margin-left: 30px;
+    border: 1px solid #ddd;
+    background-color: #fff;
+    width: 400px;
+    height: 500px;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.1);
+    padding: 15px;
+    box-sizing: border-box;
+}
+.chat-box {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 10px;
+    margin-bottom: 15px;
+    background-color: #fafafa;
+}
+.chat-input {
+    display: flex;
+    border-top: 1px solid #ddd;
+    padding: 10px 0;
+}
+.chat-input input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-right: 10px;
+}
+.chat-input button {
+    padding: 10px 15px;
+    border: 1px solid #007bff;
+    background-color: #007bff;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.room-container {
+    display: flex;
+    margin-bottom: 25px;
+    align-items: center;
+}
+.room-container input {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-right: 10px;
+    width: 240px;
+}
+.room-container button {
+    padding: 10px 12px;
+    border: 1px solid #007bff;
+    background-color: #007bff;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
 }
 .board {
-    aspect-ratio : 1.125 / 1;
-    position: fixed;
-    left: calc(60% / 2);
-    top: calc(60% - 600px / 2);
+    /* aspect-ratio : 1.125 / 1; */
+    width: 500px;
+    height: 500px;
+    background-color: transparent;
+    position: relative;
     display: flex;
     flex-wrap: wrap;
-    width: calc(40%);
+    /* margin-bottom: 100px; */
+    transition: opacity 0.3s ease;
+    z-index: 10;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.2);
 }
-
+.board.hidden {
+    opacity: 0;
+    position: absolute;
+}
+.player-turn {
+    position: absolute;
+    top: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 24px;
+    color: white;
+}
 .square {
-    width: calc(100% / 9);
+    width: calc(100% / 8);
     height: calc(100% / 8);
     display: flex;
     justify-content: center;
     align-items: center;
     font-size: 30px;
-    border: 1px solid #000;
+    /* outline: 1px solid black; */
 }
 
 .square.white {
-    background-color: #eee;
+    background-color: #f0dab5;
 }
 
 .square.black {
-    background-color: #333;
-    color: #fff;
+    background-color: #b58962;
 }
 
-.square.selected {
-    background-color: #c2c2c2;
+.square.white.moveable {
+    background-color: #a1fe8e;
 }
 
-.square.moveable {
-    background-color: #8bc34a;
+.square.black.moveable {
+    background-color: #60ab51;
 }
 
 .piece {
