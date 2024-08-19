@@ -40,11 +40,18 @@ function resetBoard() {
 socket.on('gameState', (state) => {
     // document.getElementById('messages').innerHTML = JSON.stringify(state);
     processServerMoves(state.moves);
+    if (boardOrientation == "white") {
+        isCurrentlyUsersTurn = true;
+    } else {
+        isCurrentlyUsersTurn = false;
+    }
 });
 
 
 socket.on('moveUpdate', (state) => {
     recievedMoveFromServer(state.move.from, state.move.to);
+    console.log("update")
+    isCurrentlyUsersTurn = !isCurrentlyUsersTurn;
 });
 
 

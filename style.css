@@ -5,6 +5,7 @@ body {
     display: flex;
     height: 100vh;
     background-color: #f4f4f4;
+    user-select: ;
 }
 .container {
     display: flex;
@@ -92,6 +93,8 @@ body {
     transition: opacity 0.3s ease;
     z-index: 10;
     box-shadow: 0 0 12px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+    border-radius: 2px;
 }
 .board.hidden {
     opacity: 0;

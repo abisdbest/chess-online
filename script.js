@@ -4,6 +4,11 @@ let possibleMoves = [];
 let movesToProcess = [];
 let boardElement
 let boardOrientation = confirm("black => ok,\nwhite => cancel") ? 'black' : 'white'; // the boardorientation variable tells you what color the user has chosen to be
+let isCurrentlyUsersTurn = false;
+
+if (boardOrientation == "white") {
+    isCurrentlyUsersTurn = true;
+}
 
 const board = [
     ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
@@ -77,6 +82,9 @@ function getSquareColor(row, col) {
 }
 
 function handleSquareClick(event) {
+    if (!isCurrentlyUsersTurn) {
+        return;
+    }
     const row = parseInt(event.target.closest('.square').dataset.row);
     const col = parseInt(event.target.closest('.square').dataset.col);
 
@@ -198,20 +206,24 @@ function getKnightMoves(row, col) {
 
 function getLinearMoves(row, col, directions) {
     const moves = [];
-    const piece = board[row][col].toLowerCase();
+    const piece = board[row][col];
+    const pieceColor = piece === piece.toUpperCase() ? 'white' : 'black';
 
     directions.forEach(direction => {
         let newRow = row + direction.row;
         let newCol = col + direction.col;
 
         while (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
-            if (board[newRow][newCol] === '') {
+            const destinationPiece = board[newRow][newCol];
+            const destinationColor = destinationPiece === destinationPiece.toUpperCase() ? 'white' : 'black';
+
+            if (destinationPiece === '') {
                 moves.push({ row: newRow, col: newCol });
-            } else if (board[newRow][newCol].toLowerCase() !== piece) {
+            } else if (destinationColor !== pieceColor) {
                 moves.push({ row: newRow, col: newCol });
-                break;
+                break;  // Stop the loop since you can't move past an opponent's piece
             } else {
-                break;
+                break;  // Stop the loop since you can't take your own piece
             }
 
             newRow += direction.row;
@@ -224,7 +236,9 @@ function getLinearMoves(row, col, directions) {
 
 
 
+
 function makeMove(from, to) {
+    isCurrentlyUsersTurn = true;
     socket.emit('newMove', { room: currentRoom, move: { from, to } });
 }
 
