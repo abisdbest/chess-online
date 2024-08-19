@@ -5,7 +5,7 @@ body {
     display: flex;
     height: 100vh;
     background-color: #f4f4f4;
-    user-select: ;
+    user-select: none;
 }
 .container {
     display: flex;
