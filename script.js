@@ -34,6 +34,7 @@ let possibleMoves = [];
 let boardOrientation = 'white';  // Default, updated from server
 let isCurrentlyUsersTurn = false;
 let currentRoom = null;
+let myID = null;
 
 // DOM Elements
 const boardElement = document.getElementById('board');
@@ -116,11 +117,17 @@ function getPawnMoves(row, col, pieceColor) {
     const direction = pieceColor === 'white' ? -1 : 1;
     const startRow = pieceColor === 'white' ? 6 : 1;
     const forwardRow = row + direction;
+    const opponentColor = pieceColor === 'white' ? 'black' : 'white';
 
-    // Forward move (one square) - No capture possible here, so no color check needed
+    // Forward move (one square)
+    if (forwardRow >= 0 && forwardRow < 8 && board[forwardRow][col] === '') {
+        moves.push({ row: forwardRow, col });
+    }
 
-    // Forward move (two squares, on first move only) - No capture possible here, so no color check needed
-
+    // Forward move (two squares, on first move only)
+    if (row === startRow && board[row + direction][col] === '' && board[row + 2 * direction][col] === '') {
+        moves.push({ row: row + 2 * direction, col });
+    }
 
     // Capture diagonally
     const captureCols = [col - 1, col + 1];
@@ -128,14 +135,9 @@ function getPawnMoves(row, col, pieceColor) {
         if (captureCol >= 0 && captureCol < 8 && board[forwardRow] && board[forwardRow][captureCol]) {
             const destinationPiece = board[forwardRow][captureCol];
             const destinationPieceColor = destinationPiece === destinationPiece.toUpperCase() ? 'white' : 'black';
-            const isSameColor = (destinationPieceColor === pieceColor);
 
-            console.log(`getPawnMoves - Checking capture square: ${forwardRow},${captureCol}, Destination piece: ${destinationPiece}, Destination color: ${destinationPieceColor}, My color: ${pieceColor}, Same color: ${isSameColor}`); // Detailed log
-
-            if (!isSameColor) { // Correct condition - capture if NOT same color (i.e., opponent or empty - but should be opponent due to check above)
+            if (destinationPieceColor === opponentColor) {
                 moves.push({ row: forwardRow, col: captureCol });
-            } else {
-                console.log(`getPawnMoves - Blocked by own piece at capture square: ${forwardRow},${captureCol}`); // Log own piece block
             }
         }
     }
@@ -147,26 +149,23 @@ function getKnightMoves(row, col, pieceColor) {
         { row: -2, col: -1 }, { row: -2, col: 1 }, { row: -1, col: -2 }, { row: -1, col: 2 },
         { row: 1, col: -2 }, { row: 1, col: 2 }, { row: 2, col: -1 }, { row: 2, col: 1 }
     ];
+
     return knightMoves
         .map(move => ({ row: row + move.row, col: col + move.col }))
         .filter(({ row: newRow, col: newCol }) => {
             const isValidSquare = newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8;
             if (!isValidSquare) {
-                console.log(`getKnightMoves - Invalid square: ${newRow},${newCol} (out of bounds)`); // Log out-of-bounds
-                return false; // Skip out-of-bounds squares
+                return false;
             }
 
             const destinationPiece = board[newRow][newCol];
             const destinationPieceColor = destinationPiece === destinationPiece.toUpperCase() ? 'white' : 'black';
             const isSameColor = (destinationPieceColor === pieceColor);
 
-            console.log(`getKnightMoves - Checking square: ${newRow},${newCol}, Destination piece: ${destinationPiece}, Destination color: ${destinationPieceColor}, My color: ${pieceColor}, Same color: ${isSameColor}`); // Detailed log
-
-            if (destinationPiece === '' || !isSameColor) { // Correct condition - allow empty or opponent piece
-                return true; // Valid move if empty or opponent
+            if (destinationPiece === '' || !isSameColor) {
+                return true;
             } else {
-                console.log(`getKnightMoves - Blocked by own piece at ${newRow},${newCol}`); // Log own piece block
-                return false; // Invalid if own piece
+                return false;
             }
         });
 }
@@ -183,21 +182,17 @@ function getKingMoves(row, col, pieceColor) {
         .filter(({ row: newRow, col: newCol }) => {
             const isValidSquare = newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8;
             if (!isValidSquare) {
-                console.log(`getKingMoves - Invalid square: ${newRow},${newCol} (out of bounds)`); // Log out-of-bounds
-                return false; // Skip out-of-bounds squares
+                return false;
             }
 
             const destinationPiece = board[newRow][newCol];
             const destinationPieceColor = destinationPiece === destinationPiece.toUpperCase() ? 'white' : 'black';
             const isSameColor = (destinationPieceColor === pieceColor);
 
-            // console.log(`getKingMoves - Checking square: ${newRow},${newCol}, Destination piece: ${destinationPiece}, Destination color: ${destinationPieceColor}, My color: ${pieceColor}, Same color: ${isSameColor}`); // Detailed log - No need to log every king move anymore, as it's working
-
-            if (destinationPiece === '' || !isSameColor) { // Correct condition - allow empty or opponent piece
-                return true; // Valid move if empty or opponent
+            if (destinationPiece === '' || !isSameColor) {
+                return true;
             } else {
-                console.log(`getKingMoves - Blocked by own piece at ${newRow},${newCol}`); // Log own piece block
-                return false; // Invalid if own piece
+                return false;
             }
         });
 }
@@ -205,26 +200,22 @@ function getKingMoves(row, col, pieceColor) {
 function getLinearMoves(row, col, directions, pieceColor) {
     const moves = [];
     const piece = board[row][col];
-    const myColor = piece === piece.toUpperCase() ? 'white' : 'black'; // Get color of the piece moving
+    const myColor = piece === piece.toUpperCase() ? 'white' : 'black';
 
     for (const direction of directions) {
         let newRow = row + direction.row;
         let newCol = col + direction.col;
         while (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
             const destinationPiece = board[newRow][newCol];
-            const destinationColor = destinationPiece === destinationPiece.toUpperCase() ? 'white' : 'black'; // Get color of piece at destination
-
-            // console.log(`Linear move - Checking ${newRow},${newCol}. Destination piece: ${destinationPiece}, Destination color: ${destinationColor}, My color: ${myColor}`); // Debugging - No need to log linear moves anymore
+            const destinationColor = destinationPiece === destinationPiece.toUpperCase() ? 'white' : 'black';
 
             if (destinationPiece === '') {
                 moves.push({ row: newRow, col: newCol });
-            } else if (destinationColor !== myColor) { // Correct color comparison for capture
-                // console.log(`Linear move - Can capture opponent piece at ${newRow},${newCol}`); // Debugging - No need to log linear captures anymore
+            } else if (destinationColor !== myColor) {
                 moves.push({ row: newRow, col: newCol });
-                break; // Stop after capturing opponent
+                break;
             } else {
-                // console.log(`Linear move - Blocked by own piece at ${newRow},${newCol}`); // Debugging - No need to log linear blocks anymore
-                break; // Stop if own piece
+                break;
             }
             newRow += direction.row;
             newCol += direction.col;
@@ -242,20 +233,14 @@ function handleSquareClick(event) {
     const col = parseInt(square.dataset.col);
     const piece = board[row][col];
 
-    console.log(`handleSquareClick - Piece clicked: ${piece}, boardOrientation: ${boardOrientation}`); // Log piece and orientation
-
     if (!selectedSquare) {
-        const pieceColor = (piece.toLowerCase() === piece ? 'black' : 'white'); // Determine piece color
-        const isCorrectColor = (pieceColor === boardOrientation); // Compare with boardOrientation
+        const pieceColor = (piece.toLowerCase() === piece ? 'black' : 'white');
+        const isCorrectColor = (pieceColor === boardOrientation);
 
-        console.log(`handleSquareClick - Piece color: ${pieceColor}, Board orientation color: ${boardOrientation}, Color check result: ${isCorrectColor}`); // Log details
-
-        if (piece && isCorrectColor) { // Use isCorrectColor for the condition
+        if (piece && isCorrectColor) {
             selectedSquare = { row, col };
             possibleMoves = getValidMoves(row, col);
             renderBoard();
-        } else if (piece) {
-            console.log(`handleSquareClick - Wrong color piece selected. Piece color: ${pieceColor}, Your color: ${boardOrientation}`); // Log wrong color selection
         }
     } else {
         const move = possibleMoves.find(m => m.row === row && m.col === col);
@@ -275,7 +260,7 @@ function makeMove(from, to) {
     socket.emit('newMove', { room: currentRoom, move: { from: fromNotation, to: toNotation } });
     selectedSquare = null;
     possibleMoves = [];
-    isCurrentlyUsersTurn = false; // Server will update this
+    isCurrentlyUsersTurn = false;
     updateTurnIndicator();
 }
 
@@ -284,13 +269,14 @@ function resetBoard() {
     selectedSquare = null;
     possibleMoves = [];
     renderBoard();
-    isCurrentlyUsersTurn = boardOrientation === 'white'; // Server will update this, but this is a good default
+    isCurrentlyUsersTurn = boardOrientation === 'white';
     updateTurnIndicator();
 }
 
 // --- Socket.IO Event Handlers ---
 socket.on('connect', () => {
     console.log('Connected to server');
+    myID = socket.id;
     const urlParams = new URLSearchParams(window.location.search);
     const urlRoomCode = urlParams.get('room');
     if (urlRoomCode) {
@@ -321,11 +307,9 @@ socket.on('moveUpdate', (data) => {
     const fromCoords = notationToCoords(from);
     const toCoords = notationToCoords(to);
 
-    // Update board state
     board[toCoords[0]][toCoords[1]] = board[fromCoords[0]][fromCoords[1]];
     board[fromCoords[0]][fromCoords[1]] = '';
 
-    // Use server's currentPlayer to determine turn
     isCurrentlyUsersTurn = data.currentPlayer === boardOrientation;
 
     renderBoard();
@@ -350,6 +334,14 @@ socket.on('roomFull', () => {
     currentRoom = null;
 });
 
+// --- CHAT ---
+socket.on('chatMessage', ({ sender, message }) => {
+    const messageElement = document.createElement('p');
+    messageElement.innerHTML = `<strong>${sender === myID ? "You" : "Opponent"}:</strong> ${message}`;
+    chatBox.appendChild(messageElement);
+    chatBox.scrollTop = chatBox.scrollHeight;
+});
+
 // --- DOM Event Listeners ---
 joinRoomButton.addEventListener('click', () => {
     const roomCode = roomInput.value.trim();
@@ -364,10 +356,26 @@ function joinRoom(roomCode) {
     }
     currentRoom = roomCode;
     socket.emit('joinRoom', roomCode);
+
+    // Fetch chat history when joining a new room
+    socket.emit('requestChatHistory', roomCode); // Request history from the server
+
     resetBoard();
     const newUrl = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
     window.history.pushState({ path: newUrl }, '', newUrl);
+
+    chatBox.innerHTML = '<p><strong>System:</strong> Welcome to the chat!</p>';
 }
+
+// New event listener for receiving chat history
+socket.on('chatHistory', (history) => {
+  history.forEach(({ sender, message }) => {
+        const messageElement = document.createElement('p');
+        messageElement.innerHTML = `<strong>${sender === myID ? "You" : "Opponent"}:</strong> ${message}`;
+        chatBox.appendChild(messageElement);
+  });
+  chatBox.scrollTop = chatBox.scrollHeight; // Scroll to bottom after loading
+});
 
 sendMessageButton.addEventListener('click', sendMessage);
 chatMessageInput.addEventListener('keydown', (event) => {
@@ -378,12 +386,9 @@ chatMessageInput.addEventListener('keydown', (event) => {
 
 function sendMessage() {
     const message = chatMessageInput.value.trim();
-    if (message) {
-        const messageElement = document.createElement('p');
-        messageElement.innerHTML = `<strong>You:</strong> ${message}`;
-        chatBox.appendChild(messageElement);
+    if (message && currentRoom) {
+        socket.emit('chatMessage', { room: currentRoom, message });
         chatMessageInput.value = '';
-        chatBox.scrollTop = chatBox.scrollHeight;
     }
 }
 
