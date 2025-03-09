@@ -4,28 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Online Chess</title>
-    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js#quizizz"></script>
     <link rel="stylesheet" href="style.css">
+    <!-- Consolidated Socket.IO and external scripts to the head -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js" integrity="sha384-mZLF4UVrpi/QTWPA7BjNPEnkIfRFn4ZEO3Qt/HFklTJBj/gBOV8G3HcKn4NfQblz" crossorigin="anonymous"></script>
+    <script defer src="script.js"></script> <!-- defer ensures script runs after HTML is parsed -->
 </head>
 <body>
     <div class="container">
-        <div class="board"></div>
+        <div id="board" class="board"></div>
         <div class="chat-container">
             <div class="room-container">
-                <input id="roomInput" type="text" placeholder="Room name">
-                <button onclick="joinRoom()">Enter Room</button>
+                <input id="roomInput" type="text" placeholder="Room Name">
+                <button id="joinRoomButton">Enter Room</button>
             </div>
-            <div class="chat-box">
-                <!-- Chat messages will appear here -->
+            <div id="chatBox" class="chat-box">
                 <p><strong>System:</strong> Welcome to the chat!</p>
             </div>
             <div class="chat-input">
-                <input type="text" placeholder="Type a message...">
-                <button>Send</button>
+                <input id="chatMessageInput" type="text" placeholder="Type a message...">
+                <button id="sendMessageButton">Send</button>
+            </div>
+            <div class="room-code-display">
+                <p id="roomCodeText"></p>
             </div>
         </div>
     </div>
-    <script src="serverConnection.js"></script>
-    <script src="script.js"></script>
+    <div id="playerTurnIndicator" class="player-turn"></div>
 </body>
 </html>

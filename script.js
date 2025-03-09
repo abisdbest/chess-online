@@ -1,16 +1,23 @@
-// Chess game logic
-let selectedSquare = null;
-let possibleMoves = [];
-let movesToProcess = [];
-let boardElement
-let boardOrientation = confirm("black => ok,\nwhite => cancel") ? 'black' : 'white'; // the boardorientation variable tells you what color the user has chosen to be
-let isCurrentlyUsersTurn = false;
+// script.js
+const socket = io('https://quizizz-chess-server.onrender.com/');
 
-if (boardOrientation == "white") {
-    isCurrentlyUsersTurn = true;
-}
+// --- Constants and Initial Setup ---
+const PIECE_IMAGES = {
+    'P': 'https://quizizzchessimages.pages.dev/images/p2.png',
+    'R': 'https://quizizzchessimages.pages.dev/images/r2.png',
+    'N': 'https://quizizzchessimages.pages.dev/images/n2.png',
+    'B': 'https://quizizzchessimages.pages.dev/images/b2.png',
+    'Q': 'https://quizizzchessimages.pages.dev/images/q2.png',
+    'K': 'https://quizizzchessimages.pages.dev/images/k2.png',
+    'p': 'https://quizizzchessimages.pages.dev/images/p.png',
+    'r': 'https://quizizzchessimages.pages.dev/images/r.png',
+    'n': 'https://quizizzchessimages.pages.dev/images/n.png',
+    'b': 'https://quizizzchessimages.pages.dev/images/b.png',
+    'q': 'https://quizizzchessimages.pages.dev/images/q.png',
+    'k': 'https://quizizzchessimages.pages.dev/images/k.png',
+};
 
-const board = [
+const STARTING_POSITION = [
     ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
     ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
     ['', '', '', '', '', '', '', ''],
@@ -21,167 +28,150 @@ const board = [
     ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'],
 ];
 
+let board = JSON.parse(JSON.stringify(STARTING_POSITION)); // Deep copy
+let selectedSquare = null;
+let possibleMoves = [];
+let boardOrientation = 'white';  // Default, updated from server
+let isCurrentlyUsersTurn = false;
+let currentRoom = null;
+
+// DOM Elements
+const boardElement = document.getElementById('board');
+const roomInput = document.getElementById('roomInput');
+const joinRoomButton = document.getElementById('joinRoomButton');
+const chatBox = document.getElementById('chatBox');
+const chatMessageInput = document.getElementById('chatMessageInput');
+const sendMessageButton = document.getElementById('sendMessageButton');
+const roomCodeText = document.getElementById('roomCodeText');
+const playerTurnIndicator = document.getElementById('playerTurnIndicator');
+
+// --- Utility Functions ---
+const getSquareColor = (row, col) => (row + col) % 2 === 0 ? 'white' : 'black';
+const getPieceImage = (piece) => PIECE_IMAGES[piece];
+const notationToCoords = (notation) => {
+    const col = notation.charCodeAt(0) - 'a'.charCodeAt(0);
+    const row = 8 - parseInt(notation.slice(1));
+    return [row, col];
+};
+const coordsToNotation = (row, col) => {
+    const colChar = String.fromCharCode('a'.charCodeAt(0) + col);
+    const rowChar = String.fromCharCode('1'.charCodeAt(0) + (7 - row));
+    return `${colChar}${rowChar}`;
+};
+
+// --- Board Rendering ---
 function renderBoard() {
-    const boardElement = document.querySelector('.board');
-    console.log('Rendering Board:', board); // Debugging output
     boardElement.innerHTML = '';
-    
-    const rows = 8;
-    const cols = 8;
-    
-    // Adjust row and col for black orientation
-    for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-            const adjustedRow = boardOrientation === 'white' ? row : (rows - 1 - row);
-            const adjustedCol = boardOrientation === 'white' ? col : (cols - 1 - col);
-    
+    for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+            const adjustedRow = boardOrientation === 'white' ? row : 7 - row;
+            const adjustedCol = boardOrientation === 'white' ? col : 7 - col;
             const square = document.createElement('div');
             square.className = `square ${getSquareColor(adjustedRow, adjustedCol)}`;
             square.dataset.row = adjustedRow;
             square.dataset.col = adjustedCol;
-    
             const piece = board[adjustedRow][adjustedCol];
-            if (piece !== '') {
+            if (piece) {
                 const pieceImage = document.createElement('img');
                 pieceImage.src = getPieceImage(piece);
                 pieceImage.className = 'piece';
+                pieceImage.draggable = false;
                 square.appendChild(pieceImage);
             }
-    
             square.addEventListener('click', handleSquareClick);
-    
             if (possibleMoves.some(move => move.row === adjustedRow && move.col === adjustedCol)) {
                 square.classList.add('moveable');
             }
-    
             boardElement.appendChild(square);
         }
     }
+    updateTurnIndicator();
 }
 
-function getPieceImage(piece) {
-    const pieceImages = {
-        'P': 'https://quizizzchessimages.pages.dev/images/p2.png',
-        'R': 'https://quizizzchessimages.pages.dev/images/r2.png',
-        'N': 'https://quizizzchessimages.pages.dev/images/n2.png',
-        'B': 'https://quizizzchessimages.pages.dev/images/b2.png',
-        'Q': 'https://quizizzchessimages.pages.dev/images/q2.png',
-        'K': 'https://quizizzchessimages.pages.dev/images/k2.png',
-        'p': 'https://quizizzchessimages.pages.dev/images/p.png',
-        'r': 'https://quizizzchessimages.pages.dev/images/r.png',
-        'n': 'https://quizizzchessimages.pages.dev/images/n.png',
-        'b': 'https://quizizzchessimages.pages.dev/images/b.png',
-        'q': 'https://quizizzchessimages.pages.dev/images/q.png',
-        'k': 'https://quizizzchessimages.pages.dev/images/k.png',
-    };
-    return pieceImages[piece];
+function updateTurnIndicator() {
+    playerTurnIndicator.textContent = isCurrentlyUsersTurn ? "Your Turn" : "Waiting for Opponent";
+    playerTurnIndicator.style.color = isCurrentlyUsersTurn ? "green" : "red";
 }
 
-function getSquareColor(row, col) {
-    return (row + col) % 2 === 0 ? 'white' : 'black';
-}
-
-function handleSquareClick(event) {
-    if (!isCurrentlyUsersTurn) {
-        return;
-    }
-    const row = parseInt(event.target.closest('.square').dataset.row);
-    const col = parseInt(event.target.closest('.square').dataset.col);
-
-    const piece = board[row][col];
-    const pieceColor = piece === piece.toUpperCase() ? 'white' : 'black';
-
-    if (!selectedSquare) {
-        if (piece !== '' && pieceColor === boardOrientation) {
-            selectedSquare = { row, col };
-            possibleMoves = getValidMoves(row, col);
-            renderBoard();
-        }
-    } else {
-        const move = possibleMoves.find(move => move.row === row && move.col === col);
-
-        if (move) {
-            makeMove(selectedSquare, move);
-            selectedSquare = null;
-            possibleMoves = [];
-        } else {
-            selectedSquare = null;
-            possibleMoves = [];
-        }
-
-        renderBoard();
-    }
-}
-
-
+// --- Move Generation ---
 function getValidMoves(row, col) {
-    const piece = board[row][col].toLowerCase();
-    const pieceColor = board[row][col] === board[row][col].toUpperCase() ? 'white' : 'black';
-    let moves = [];
-
-    if (piece === 'p') {
-        moves = getPawnMoves(row, col, pieceColor);
-    } else if (piece === 'r') {
-        moves = getRookMoves(row, col, pieceColor);
-    } else if (piece === 'n') {
-        moves = getKnightMoves(row, col, pieceColor);
-    } else if (piece === 'b') {
-        moves = getBishopMoves(row, col, pieceColor);
-    } else if (piece === 'q') {
-        moves = getQueenMoves(row, col, pieceColor);
-    } else if (piece === 'k') {
-        moves = getKingMoves(row, col, pieceColor);
+    const piece = board[row][col];
+    if (!piece) return [];
+    const pieceType = piece.toLowerCase();
+    const pieceColor = piece === piece.toUpperCase() ? 'white' : 'black';
+    if (pieceColor !== boardOrientation) return [];
+    switch (pieceType) {
+        case 'p': return getPawnMoves(row, col, pieceColor);
+        case 'r': return getLinearMoves(row, col, [{ row: 1, col: 0 }, { row: -1, col: 0 }, { row: 0, col: 1 }, { row: 0, col: -1 }], pieceColor);
+        case 'n': return getKnightMoves(row, col, pieceColor);
+        case 'b': return getLinearMoves(row, col, [{ row: 1, col: 1 }, { row: 1, col: -1 }, { row: -1, col: 1 }, { row: -1, col: -1 }], pieceColor);
+        case 'q': return getLinearMoves(row, col, [{ row: 1, col: 0 }, { row: -1, col: 0 }, { row: 0, col: 1 }, { row: 0, col: -1 }, { row: 1, col: 1 }, { row: 1, col: -1 }, { row: -1, col: 1 }, { row: -1, col: -1 }], pieceColor);
+        case 'k': return getKingMoves(row, col, pieceColor);
+        default: return [];
     }
-
-    return moves;
 }
 
-function getPawnMoves(row, col) {
+function getPawnMoves(row, col, pieceColor) {
     const moves = [];
-    const piece = board[row][col];
-    const direction = piece === 'p' ? 1 : -1; // 1 for white pawns, -1 for black pawns
-    const startRow = piece === 'p' ? 1 : 6;
-    const opponentColor = boardOrientation === 'white' ? 'rnbqkp' : 'RNBQKP';
+    const direction = pieceColor === 'white' ? -1 : 1;
+    const startRow = pieceColor === 'white' ? 6 : 1;
+    const forwardRow = row + direction;
 
-    // Forward move
-    if (board[row + direction][col] === '') {
-        moves.push({ row: row + direction, col });
+    // Forward move (one square) - No capture possible here, so no color check needed
 
-        // Two-space forward move on first move
-        if (row === startRow && board[row + 2 * direction][col] === '') {
-            moves.push({ row: row + 2 * direction, col });
+    // Forward move (two squares, on first move only) - No capture possible here, so no color check needed
+
+
+    // Capture diagonally
+    const captureCols = [col - 1, col + 1];
+    for (const captureCol of captureCols) {
+        if (captureCol >= 0 && captureCol < 8 && board[forwardRow] && board[forwardRow][captureCol]) {
+            const destinationPiece = board[forwardRow][captureCol];
+            const destinationPieceColor = destinationPiece === destinationPiece.toUpperCase() ? 'white' : 'black';
+            const isSameColor = (destinationPieceColor === pieceColor);
+
+            console.log(`getPawnMoves - Checking capture square: ${forwardRow},${captureCol}, Destination piece: ${destinationPiece}, Destination color: ${destinationPieceColor}, My color: ${pieceColor}, Same color: ${isSameColor}`); // Detailed log
+
+            if (!isSameColor) { // Correct condition - capture if NOT same color (i.e., opponent or empty - but should be opponent due to check above)
+                moves.push({ row: forwardRow, col: captureCol });
+            } else {
+                console.log(`getPawnMoves - Blocked by own piece at capture square: ${forwardRow},${captureCol}`); // Log own piece block
+            }
         }
     }
-
-    // Capture diagonally left
-    if (col > 0 && board[row + direction][col - 1] !== '' && opponentColor.includes(board[row + direction][col - 1])) {
-        moves.push({ row: row + direction, col: col - 1 });
-    }
-
-    // Capture diagonally right
-    if (col < 7 && board[row + direction][col + 1] !== '' && opponentColor.includes(board[row + direction][col + 1])) {
-        moves.push({ row: row + direction, col: col + 1 });
-    }
-
     return moves;
 }
 
-function getRookMoves(row, col) {
-    return getLinearMoves(row, col, [{ row: 1, col: 0 }, { row: -1, col: 0 }, { row: 0, col: 1 }, { row: 0, col: -1 }]);
-}
-
-function getBishopMoves(row, col) {
-    return getLinearMoves(row, col, [{ row: 1, col: 1 }, { row: 1, col: -1 }, { row: -1, col: 1 }, { row: -1, col: -1 }]);
-}
-
-function getQueenMoves(row, col) {
-    return [
-        ...getRookMoves(row, col),
-        ...getBishopMoves(row, col)
+function getKnightMoves(row, col, pieceColor) {
+    const knightMoves = [
+        { row: -2, col: -1 }, { row: -2, col: 1 }, { row: -1, col: -2 }, { row: -1, col: 2 },
+        { row: 1, col: -2 }, { row: 1, col: 2 }, { row: 2, col: -1 }, { row: 2, col: 1 }
     ];
+    return knightMoves
+        .map(move => ({ row: row + move.row, col: col + move.col }))
+        .filter(({ row: newRow, col: newCol }) => {
+            const isValidSquare = newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8;
+            if (!isValidSquare) {
+                console.log(`getKnightMoves - Invalid square: ${newRow},${newCol} (out of bounds)`); // Log out-of-bounds
+                return false; // Skip out-of-bounds squares
+            }
+
+            const destinationPiece = board[newRow][newCol];
+            const destinationPieceColor = destinationPiece === destinationPiece.toUpperCase() ? 'white' : 'black';
+            const isSameColor = (destinationPieceColor === pieceColor);
+
+            console.log(`getKnightMoves - Checking square: ${newRow},${newCol}, Destination piece: ${destinationPiece}, Destination color: ${destinationPieceColor}, My color: ${pieceColor}, Same color: ${isSameColor}`); // Detailed log
+
+            if (destinationPiece === '' || !isSameColor) { // Correct condition - allow empty or opponent piece
+                return true; // Valid move if empty or opponent
+            } else {
+                console.log(`getKnightMoves - Blocked by own piece at ${newRow},${newCol}`); // Log own piece block
+                return false; // Invalid if own piece
+            }
+        });
 }
 
-function getKingMoves(row, col) {
+function getKingMoves(row, col, pieceColor) {
     const kingMoves = [
         { row: -1, col: -1 }, { row: -1, col: 0 }, { row: -1, col: 1 },
         { row: 0, col: -1 }, { row: 0, col: 1 },
@@ -190,96 +180,214 @@ function getKingMoves(row, col) {
 
     return kingMoves
         .map(move => ({ row: row + move.row, col: col + move.col }))
-        .filter(({ row: newRow, col: newCol }) => newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8 && (board[newRow][newCol] === '' || board[newRow][newCol].toLowerCase() !== board[row][col].toLowerCase()));
+        .filter(({ row: newRow, col: newCol }) => {
+            const isValidSquare = newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8;
+            if (!isValidSquare) {
+                console.log(`getKingMoves - Invalid square: ${newRow},${newCol} (out of bounds)`); // Log out-of-bounds
+                return false; // Skip out-of-bounds squares
+            }
+
+            const destinationPiece = board[newRow][newCol];
+            const destinationPieceColor = destinationPiece === destinationPiece.toUpperCase() ? 'white' : 'black';
+            const isSameColor = (destinationPieceColor === pieceColor);
+
+            // console.log(`getKingMoves - Checking square: ${newRow},${newCol}, Destination piece: ${destinationPiece}, Destination color: ${destinationPieceColor}, My color: ${pieceColor}, Same color: ${isSameColor}`); // Detailed log - No need to log every king move anymore, as it's working
+
+            if (destinationPiece === '' || !isSameColor) { // Correct condition - allow empty or opponent piece
+                return true; // Valid move if empty or opponent
+            } else {
+                console.log(`getKingMoves - Blocked by own piece at ${newRow},${newCol}`); // Log own piece block
+                return false; // Invalid if own piece
+            }
+        });
 }
 
-function getKnightMoves(row, col) {
-    const knightMoves = [
-        { row: -2, col: -1 }, { row: -2, col: 1 }, { row: -1, col: -2 }, { row: -1, col: 2 },
-        { row: 1, col: -2 }, { row: 1, col: 2 }, { row: 2, col: -1 }, { row: 2, col: 1 }
-    ];
-
-    return knightMoves
-        .map(move => ({ row: row + move.row, col: col + move.col }))
-        .filter(({ row: newRow, col: newCol }) => newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8 && (board[newRow][newCol] === '' || board[newRow][newCol].toLowerCase() !== board[row][col].toLowerCase()));
-}
-
-function getLinearMoves(row, col, directions) {
+function getLinearMoves(row, col, directions, pieceColor) {
     const moves = [];
     const piece = board[row][col];
-    const pieceColor = piece === piece.toUpperCase() ? 'white' : 'black';
+    const myColor = piece === piece.toUpperCase() ? 'white' : 'black'; // Get color of the piece moving
 
-    directions.forEach(direction => {
+    for (const direction of directions) {
         let newRow = row + direction.row;
         let newCol = col + direction.col;
-
         while (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
             const destinationPiece = board[newRow][newCol];
-            const destinationColor = destinationPiece === destinationPiece.toUpperCase() ? 'white' : 'black';
+            const destinationColor = destinationPiece === destinationPiece.toUpperCase() ? 'white' : 'black'; // Get color of piece at destination
+
+            // console.log(`Linear move - Checking ${newRow},${newCol}. Destination piece: ${destinationPiece}, Destination color: ${destinationColor}, My color: ${myColor}`); // Debugging - No need to log linear moves anymore
 
             if (destinationPiece === '') {
                 moves.push({ row: newRow, col: newCol });
-            } else if (destinationColor !== pieceColor) {
+            } else if (destinationColor !== myColor) { // Correct color comparison for capture
+                // console.log(`Linear move - Can capture opponent piece at ${newRow},${newCol}`); // Debugging - No need to log linear captures anymore
                 moves.push({ row: newRow, col: newCol });
-                break;  // Stop the loop since you can't move past an opponent's piece
+                break; // Stop after capturing opponent
             } else {
-                break;  // Stop the loop since you can't take your own piece
+                // console.log(`Linear move - Blocked by own piece at ${newRow},${newCol}`); // Debugging - No need to log linear blocks anymore
+                break; // Stop if own piece
             }
-
             newRow += direction.row;
             newCol += direction.col;
         }
-    });
-
+    }
     return moves;
 }
 
+// --- Event Handlers ---
+function handleSquareClick(event) {
+    if (!isCurrentlyUsersTurn) return;
+    const square = event.target.closest('.square');
+    if (!square) return;
+    const row = parseInt(square.dataset.row);
+    const col = parseInt(square.dataset.col);
+    const piece = board[row][col];
 
+    console.log(`handleSquareClick - Piece clicked: ${piece}, boardOrientation: ${boardOrientation}`); // Log piece and orientation
 
+    if (!selectedSquare) {
+        const pieceColor = (piece.toLowerCase() === piece ? 'black' : 'white'); // Determine piece color
+        const isCorrectColor = (pieceColor === boardOrientation); // Compare with boardOrientation
+
+        console.log(`handleSquareClick - Piece color: ${pieceColor}, Board orientation color: ${boardOrientation}, Color check result: ${isCorrectColor}`); // Log details
+
+        if (piece && isCorrectColor) { // Use isCorrectColor for the condition
+            selectedSquare = { row, col };
+            possibleMoves = getValidMoves(row, col);
+            renderBoard();
+        } else if (piece) {
+            console.log(`handleSquareClick - Wrong color piece selected. Piece color: ${pieceColor}, Your color: ${boardOrientation}`); // Log wrong color selection
+        }
+    } else {
+        const move = possibleMoves.find(m => m.row === row && m.col === col);
+        if (move) {
+            makeMove(selectedSquare, move);
+        } else {
+            selectedSquare = null;
+            possibleMoves = [];
+            renderBoard();
+        }
+    }
+}
 
 function makeMove(from, to) {
-    isCurrentlyUsersTurn = true;
-    socket.emit('newMove', { room: currentRoom, move: { from, to } });
+    const fromNotation = coordsToNotation(from.row, from.col);
+    const toNotation = coordsToNotation(to.row, to.col);
+    socket.emit('newMove', { room: currentRoom, move: { from: fromNotation, to: toNotation } });
+    selectedSquare = null;
+    possibleMoves = [];
+    isCurrentlyUsersTurn = false; // Server will update this
+    updateTurnIndicator();
 }
 
-function makeMoveFromServer(from, to) {
-    console.log('Move from server:', from, to);
-    board[to.row][to.col] = board[from.row][from.col];
-    board[from.row][from.col] = '';
+function resetBoard() {
+    board = JSON.parse(JSON.stringify(STARTING_POSITION));
+    selectedSquare = null;
+    possibleMoves = [];
     renderBoard();
+    isCurrentlyUsersTurn = boardOrientation === 'white'; // Server will update this, but this is a good default
+    updateTurnIndicator();
 }
 
-function recievedMoveFromServer(from, to) {
-    board[to.row][to.col] = board[from.row][from.col];
-    board[from.row][from.col] = '';
+// --- Socket.IO Event Handlers ---
+socket.on('connect', () => {
+    console.log('Connected to server');
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlRoomCode = urlParams.get('room');
+    if (urlRoomCode) {
+        roomInput.value = urlRoomCode;
+        joinRoom(urlRoomCode);
+    }
+});
+
+socket.on('gameState', (gameState) => {
+    if (!Array.isArray(gameState.board) || gameState.board.length !== 8 ||
+        !gameState.board.every(row => Array.isArray(row) && row.length === 8)) {
+        console.error("Invalid board received from server:", gameState.board);
+        return;
+    }
+    board = gameState.board;
+    boardOrientation = gameState.playerColor;
+    isCurrentlyUsersTurn = gameState.isCurrentPlayerTurn;
+    currentRoom = gameState.room;
     renderBoard();
-}
+    updateTurnIndicator();
+    if (currentRoom) {
+        roomCodeText.textContent = `Room Code: ${currentRoom}`;
+    }
+});
 
+socket.on('moveUpdate', (data) => {
+    const { from, to } = data.move;
+    const fromCoords = notationToCoords(from);
+    const toCoords = notationToCoords(to);
 
-function processServerMoves(moves) {
-    moves.forEach(move => {
-        const from = move.from;
-        const to = move.to;
-        makeMoveFromServer(from, to);
-    });
+    // Update board state
+    board[toCoords[0]][toCoords[1]] = board[fromCoords[0]][fromCoords[1]];
+    board[fromCoords[0]][fromCoords[1]] = '';
+
+    // Use server's currentPlayer to determine turn
+    isCurrentlyUsersTurn = data.currentPlayer === boardOrientation;
+
     renderBoard();
+    updateTurnIndicator();
+});
+
+socket.on('opponentDisconnected', () => {
+    alert('Your opponent has disconnected.');
+    isCurrentlyUsersTurn = false;
+    updateTurnIndicator();
+});
+
+socket.on('invalidRoom', () => {
+    alert('Invalid room code.');
+    roomInput.value = '';
+    currentRoom = null;
+});
+
+socket.on('roomFull', () => {
+    alert('This room is full.');
+    roomInput.value = '';
+    currentRoom = null;
+});
+
+// --- DOM Event Listeners ---
+joinRoomButton.addEventListener('click', () => {
+    const roomCode = roomInput.value.trim();
+    if (roomCode) {
+        joinRoom(roomCode);
+    }
+});
+
+function joinRoom(roomCode) {
+    if (currentRoom) {
+        socket.emit('leaveRoom', currentRoom);
+    }
+    currentRoom = roomCode;
+    socket.emit('joinRoom', roomCode);
+    resetBoard();
+    const newUrl = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
+    window.history.pushState({ path: newUrl }, '', newUrl);
 }
 
-// function processServerMoves(moves) {
-//     moves.forEach(move => {
-//         const from = move.from;
-//         const to = move.to;
-//         makeMoveFromServer(from, to);
-//     });
-//     updateBoard();  // Call the update function to transition the new board state
-// }
+sendMessageButton.addEventListener('click', sendMessage);
+chatMessageInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+        sendMessage();
+    }
+});
 
-    
-// Helper function to convert chess notation to coordinates
-function convertNotationToCoords(notation) {
-    const col = notation.charCodeAt(0) - 'a'.charCodeAt(0);
-    const row = parseInt(notation.slice(1)) - 1;
-    return [row, col];
+function sendMessage() {
+    const message = chatMessageInput.value.trim();
+    if (message) {
+        const messageElement = document.createElement('p');
+        messageElement.innerHTML = `<strong>You:</strong> ${message}`;
+        chatBox.appendChild(messageElement);
+        chatMessageInput.value = '';
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
 }
 
-renderBoard();
+// Initial Render
+window.onload = function() {
+    renderBoard();
+};
