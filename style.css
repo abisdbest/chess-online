@@ -133,9 +133,14 @@ body {
     background-color: #60ab51;
 }
 
+/* style.css */
 .piece {
     width: 100%;
     height: 100%;
+    transition: transform 0.3s ease-in-out;
+    position: absolute; /* Ensure piece positioning context */
+    top: 0;
+    left: 0;
 }
 
 .player-turn {
