@@ -240,13 +240,14 @@ function handleSquareClick(event) {
         if (piece && isCorrectColor) {
             selectedSquare = { row, col };
             possibleMoves = getValidMoves(row, col);
-            renderBoard();
+            renderBoard(); // highlights possible moves
         }
     } else {
         const move = possibleMoves.find(m => m.row === row && m.col === col);
         if (move) {
-            makeMove(selectedSquare, move);
+            makeMove(selectedSquare, move);  // This now just emits the move
         } else {
+             // Handle deselect
             selectedSquare = null;
             possibleMoves = [];
             renderBoard();
@@ -254,24 +255,58 @@ function handleSquareClick(event) {
     }
 }
 
+
 function makeMove(from, to) {
     const fromNotation = coordsToNotation(from.row, from.col);
     const toNotation = coordsToNotation(to.row, to.col);
     socket.emit('newMove', { room: currentRoom, move: { from: fromNotation, to: toNotation } });
+     // Don't update the board locally
     selectedSquare = null;
     possibleMoves = [];
-    isCurrentlyUsersTurn = false;
-    updateTurnIndicator();
+     // Don't update isCurrentlyUsersTurn here.  Wait for server confirmation.
 }
 
-function resetBoard() {
-    board = JSON.parse(JSON.stringify(STARTING_POSITION));
-    selectedSquare = null;
-    possibleMoves = [];
-    renderBoard();
-    isCurrentlyUsersTurn = boardOrientation === 'white';
-    updateTurnIndicator();
+function animateMove(fromCoords, toCoords, piece) {
+    // 1. Get the DOM elements for the source and destination squares.
+    const fromSquare = document.querySelector(`.square[data-row="${fromCoords[0]}"][data-col="${fromCoords[1]}"]`);
+    const toSquare = document.querySelector(`.square[data-row="${toCoords[0]}"][data-col="${toCoords[1]}"]`);
+
+    // 2. Get the piece image element.
+    const pieceElement = fromSquare.querySelector('.piece');
+    if (!pieceElement) {
+        console.error("Piece element not found for animation.");
+        return;
+    }
+
+     // 3. calculate pixel offset
+     const fromRect = fromSquare.getBoundingClientRect();
+     const toRect = toSquare.getBoundingClientRect();
+     const boardRect = boardElement.getBoundingClientRect();
+
+     const deltaX = toRect.left - fromRect.left;
+     const deltaY = toRect.top - fromRect.top;
+
+     // 4. Apply a CSS transform to *move* the piece.
+     pieceElement.style.transition = 'transform 0.3s ease-in-out'; // transition on transform
+     pieceElement.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+
+     // 5. After the transition completes, update the board and re-render *without* transitions.
+     pieceElement.addEventListener('transitionend', () => {
+         // Update board data *after* animation.
+         board[toCoords[0]][toCoords[1]] = board[fromCoords[0]][fromCoords[1]];
+         board[fromCoords[0]][fromCoords[1]] = '';
+
+         // Remove the transform.
+         pieceElement.style.transform = '';
+         pieceElement.style.transition = '';
+
+         // Set user's turn
+         isCurrentlyUsersTurn = (piece.toLowerCase() === piece ? 'black' : 'white') !== boardOrientation;
+         renderBoard();  // Re-render, without transitions.
+         updateTurnIndicator();
+     }, { once: true }); // Important:  Remove the listener after it runs once.
 }
+
 
 // --- Socket.IO Event Handlers ---
 socket.on('connect', () => {
@@ -306,14 +341,11 @@ socket.on('moveUpdate', (data) => {
     const { from, to } = data.move;
     const fromCoords = notationToCoords(from);
     const toCoords = notationToCoords(to);
+    const movedPiece = board[fromCoords[0]][fromCoords[1]]; // Important for pawn promotion
 
-    board[toCoords[0]][toCoords[1]] = board[fromCoords[0]][fromCoords[1]];
-    board[fromCoords[0]][fromCoords[1]] = '';
-
-    isCurrentlyUsersTurn = data.currentPlayer === boardOrientation;
-
-    renderBoard();
-    updateTurnIndicator();
+    animateMove(fromCoords, toCoords, movedPiece);
+    // No longer directly update the board here.
+    // isCurrentlyUsersTurn is also handled inside animateMove
 });
 
 socket.on('opponentDisconnected', () => {
@@ -349,6 +381,15 @@ joinRoomButton.addEventListener('click', () => {
         joinRoom(roomCode);
     }
 });
+
+function resetBoard() {
+    board = JSON.parse(JSON.stringify(STARTING_POSITION));
+    selectedSquare = null;
+    possibleMoves = [];
+    renderBoard();
+    isCurrentlyUsersTurn = boardOrientation === 'white';
+    updateTurnIndicator();
+}
 
 function joinRoom(roomCode) {
     if (currentRoom) {
