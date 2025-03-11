@@ -133,14 +133,11 @@ body {
     background-color: #60ab51;
 }
 
-/* style.css */
 .piece {
     width: 100%;
     height: 100%;
-    transition: transform 0.3s ease-in-out;
-    position: absolute; /* Ensure piece positioning context */
-    top: 0;
-    left: 0;
+    transition: transform 0.2s ease-in-out, top 0.2s ease-in-out, left 0.2s ease-in-out; /* Add transitions */
+    position: relative; /* Ensure piece positioning context */
 }
 
 .player-turn {
